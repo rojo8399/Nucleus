@@ -4,7 +4,6 @@
  */
 package io.github.nucleuspowered.nucleus.modules.mob.commands;
 
-import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.Util;
 import io.github.nucleuspowered.nucleus.argumentparsers.ImprovedCatalogTypeParser;
 import io.github.nucleuspowered.nucleus.argumentparsers.PositiveIntegerArgument;
@@ -13,42 +12,38 @@ import io.github.nucleuspowered.nucleus.internal.annotations.RegisterCommand;
 import io.github.nucleuspowered.nucleus.internal.command.CommandBase;
 import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
 import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
-import io.github.nucleuspowered.nucleus.modules.mob.config.MobConfigAdapter;
 import org.spongepowered.api.CatalogTypes;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
-import org.spongepowered.api.entity.Entity;
+import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.entity.EntityType;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.Cause;
-import org.spongepowered.api.event.cause.NamedCause;
+import org.spongepowered.api.item.ItemTypes;
+import org.spongepowered.api.item.inventory.ItemStack;
+import org.spongepowered.api.item.inventory.ItemStackSnapshot;
+import org.spongepowered.api.item.inventory.transaction.InventoryTransactionResult;
 import org.spongepowered.api.text.Text;
-import org.spongepowered.api.world.Location;
-import org.spongepowered.api.world.World;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 @Permissions
-@RegisterCommand({"spawnmob", "spawnentity"})
-public class SpawnMobCommand extends CommandBase<CommandSource> {
+@RegisterCommand("mobspawner")
+public class MobSpawnerCommand extends CommandBase<CommandSource> {
 
     private final String playerKey = "player";
-    private final String amountKey = "amount";
     private final String mobTypeKey = "mob";
-
-    @Inject private MobConfigAdapter mobConfigAdapter;
+    private final String amountKey = "amount";
 
     @Override
     public CommandElement[] getArguments() {
         return new CommandElement[] {
-                GenericArguments.optionalWeak(GenericArguments.requiringPermission(GenericArguments.player(Text.of(playerKey)),
-                        permissions.getPermissionWithSuffix("others"))),
+                GenericArguments.optionalWeak(GenericArguments.requiringPermission(GenericArguments.player(Text.of(playerKey)), permissions.getPermissionWithSuffix("others"))),
                 new ImprovedCatalogTypeParser(Text.of(mobTypeKey), CatalogTypes.ENTITY_TYPE),
                 GenericArguments.optional(new PositiveIntegerArgument(Text.of(amountKey)), 1)
         };
@@ -57,7 +52,7 @@ public class SpawnMobCommand extends CommandBase<CommandSource> {
     @Override
     protected Map<String, PermissionInformation> permissionSuffixesToRegister() {
         Map<String, PermissionInformation> m = new HashMap<>();
-        m.put("others", new PermissionInformation(Util.getMessageWithFormat("permission.spawnmob.other"), SuggestedLevel.ADMIN));
+        m.put("others", new PermissionInformation(Util.getMessageWithFormat("permission.mobspawner.other"), SuggestedLevel.ADMIN));
         return m;
     }
 
@@ -68,43 +63,41 @@ public class SpawnMobCommand extends CommandBase<CommandSource> {
             return CommandResult.empty();
         }
 
-        // Get the amount
-        int amount = args.<Integer>getOne(amountKey).get();
-        EntityType et = args.<EntityType>getOne(mobTypeKey).get();
+        Player player = opl.get();
 
+        EntityType et = args.<EntityType>getOne(mobTypeKey).get();
         if (!Living.class.isAssignableFrom(et.getEntityClass())) {
             src.sendMessage(Util.getTextMessageWithFormat("args.entityparser.livingonly", et.getTranslation().get()));
             return CommandResult.empty();
         }
 
-        Location<World> loc = opl.get().getLocation();
-        World w = loc.getExtent();
+        int amt = args.<Integer>getOne(amountKey).orElse(1);
 
-        // Count the number of entities spawned.
-        int i = 0;
-        do {
-            Optional<Entity> e = w.createEntity(et, loc.getPosition());
-            if (e.isPresent() && w.spawnEntity(e.get(), Cause.of(NamedCause.source(opl.get())))) {
-                i++;
-            }
-        } while (i < Math.min(amount, mobConfigAdapter.getNodeOrDefault().getMaxMobsToSpawn()));
+        ItemStack mobSpawnerStack = ItemStack.builder().itemType(ItemTypes.MOB_SPAWNER).quantity(amt).build();
 
-        if (amount > mobConfigAdapter.getNodeOrDefault().getMaxMobsToSpawn()) {
-            src.sendMessage(
-                    Util.getTextMessageWithFormat("command.spawnmob.limit", String.valueOf(mobConfigAdapter.getNodeOrDefault().getMaxMobsToSpawn())));
-        }
-
-        if (i == 0) {
-            src.sendMessage(Util.getTextMessageWithFormat("command.spawnmob.fail", et.getTranslation().get()));
+        if (!mobSpawnerStack.offer(Keys.SPAWNABLE_ENTITY_TYPE, et).isSuccessful()) {
+            src.sendMessage(Util.getTextMessageWithFormat("command.mobspawner.failed", et.getTranslation().get()));
             return CommandResult.empty();
         }
 
-        if (i == 1) {
-            src.sendMessage(Util.getTextMessageWithFormat("command.spawnmob.success.singular", String.valueOf(i), et.getTranslation().get()));
-        } else {
-            src.sendMessage(Util.getTextMessageWithFormat("command.spawnmob.success.plural", String.valueOf(i), et.getTranslation().get()));
+        InventoryTransactionResult itr = player.getInventory().offer(mobSpawnerStack);
+        int given = amt;
+        if (!itr.getRejectedItems().isEmpty()) {
+            ItemStackSnapshot iss = itr.getRejectedItems().stream().findFirst().get();
+            if (iss.getCount() == amt) {
+                // Failed.
+                src.sendMessage(Util.getTextMessageWithFormat("command.mobspawner.rejected"));
+                return CommandResult.empty();
+            }
+
+            given = amt - iss.getCount();
         }
 
+        if (!src.equals(player)) {
+            src.sendMessage(Util.getTextMessageWithFormat("command.mobspawner.givenother", String.valueOf(given), et.getTranslation().get(), player.getName()));
+        }
+
+        player.sendMessage(Util.getTextMessageWithFormat("command.mobspawner.given", String.valueOf(given), et.getTranslation().get()));
         return CommandResult.success();
     }
 }
