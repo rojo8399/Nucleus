@@ -13,7 +13,14 @@ public class WarpConfig {
     @Setting(value = "separate-permissions", comment = "loc:config.warps.separate")
     private boolean separate_permissions = false;
 
+    @Setting(value = "enable-warp-signs", comment = "loc:config.warps.signs")
+    private boolean enable_warp_signs = true;
+
     public boolean isSeparatePermissions() {
         return separate_permissions;
+    }
+
+    public boolean areWarpSignsEnabled() {
+        return enable_warp_signs;
     }
 }

@@ -49,7 +49,8 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.asset.Asset;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.event.Listener;
-import org.spongepowered.api.event.game.state.GamePostInitializationEvent;
+import org.spongepowered.api.event.Order;
+import org.spongepowered.api.event.game.state.GameInitializationEvent;
 import org.spongepowered.api.event.game.state.GamePreInitializationEvent;
 import org.spongepowered.api.event.game.state.GameStoppedServerEvent;
 import org.spongepowered.api.plugin.Plugin;
@@ -163,13 +164,13 @@ public class Nucleus {
         }
     }
 
-    @Listener
-    public void onPostInit(GamePostInitializationEvent event) {
+    @Listener(order = Order.LAST)
+    public void onPostInit(GameInitializationEvent event) {
         if (isErrored) {
             return;
         }
 
-        logger.info(messageProvider.getMessageWithFormat("startup.postinit", PluginInfo.NAME));
+        logger.info(messageProvider.getMessageWithFormat("startup.init", PluginInfo.NAME));
 
         // Load up the general data file now, mods should have registered items by now.
         try {
