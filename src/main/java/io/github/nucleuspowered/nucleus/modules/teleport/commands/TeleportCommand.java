@@ -6,10 +6,7 @@ package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
 import com.google.inject.Inject;
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.argumentparsers.NicknameArgument;
-import io.github.nucleuspowered.nucleus.argumentparsers.NoCostArgument;
-import io.github.nucleuspowered.nucleus.argumentparsers.NoWarmupArgument;
-import io.github.nucleuspowered.nucleus.argumentparsers.TwoPlayersArgument;
+import io.github.nucleuspowered.nucleus.argumentparsers.*;
 import io.github.nucleuspowered.nucleus.dataservices.loaders.UserDataManager;
 import io.github.nucleuspowered.nucleus.internal.annotations.ConfigCommandAlias;
 import io.github.nucleuspowered.nucleus.internal.annotations.Permissions;
@@ -27,6 +24,7 @@ import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.util.Tristate;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +38,7 @@ public class TeleportCommand extends CommandBase<CommandSource> {
     private final String playerFromKey = "playerFrom";
     private final String playerKey = "player";
     private final String quietKey = "quiet";
+    private final String tristateResult = "tristate";
 
     @Inject private TeleportHandler handler;
     @Inject private TeleportConfigAdapter tca;
@@ -56,7 +55,8 @@ public class TeleportCommand extends CommandBase<CommandSource> {
     @Override
     public CommandElement[] getArguments() {
        return new CommandElement[]{
-                GenericArguments.flags().flag("f")
+                GenericArguments.flags()
+                        .valueFlag(GenericArguments.optionalWeak(NucleusGenericArgument.tristateChoice(Text.of(tristateResult))), "s", "-safe")
                         .valueFlag(GenericArguments.requiringPermission(GenericArguments.bool(Text.of(quietKey)), permissions.getPermissionWithSuffix("quiet")), "q")
                         .buildWith(GenericArguments.none()),
 
@@ -117,8 +117,16 @@ public class TeleportCommand extends CommandBase<CommandSource> {
             return CommandResult.empty();
         }
 
+        boolean isSafe;
+        Tristate t = args.<Tristate>getOne(tristateResult).orElse(Tristate.UNDEFINED);
+        if (t == Tristate.UNDEFINED) {
+            isSafe = args.hasAny("s") || tca.getNodeOrDefault().isDefaultSafeTeleport();
+        } else {
+            isSafe = t.asBoolean();
+        }
+
         Player pl = args.<Player>getOne(playerKey).get();
-        if (handler.getBuilder().setSource(src).setFrom(from).setTo(pl).setSafe(!args.<Boolean>getOne("f").orElse(false))
+        if (handler.getBuilder().setSource(src).setFrom(from).setTo(pl).setSafe(isSafe)
                 .setSilentTarget(beQuiet).startTeleport()) {
             return CommandResult.success();
         }

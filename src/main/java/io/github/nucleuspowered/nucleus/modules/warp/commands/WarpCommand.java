@@ -14,6 +14,7 @@ import io.github.nucleuspowered.nucleus.internal.annotations.RegisterCommand;
 import io.github.nucleuspowered.nucleus.internal.command.CommandBase;
 import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
 import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.warp.config.WarpConfig;
 import io.github.nucleuspowered.nucleus.modules.warp.config.WarpConfigAdapter;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.args.CommandContext;
@@ -30,7 +31,7 @@ import java.util.Optional;
 /**
  * Allows a user to warp to the specified warp.
  *
- * Command Usage: /warp [warp] Permission: quickstart.warp.base
+ * Command Usage: /warp [warp] Permission: nucleus.warp.base
  *
  * <p>
  * If <code>warp.separate-permissions</code> = <code>true</code> in the commands
@@ -107,13 +108,14 @@ public class WarpCommand extends CommandBase<Player> {
     public CommandResult executeCommand(Player pl, CommandContext args) throws Exception {
         // Permission checks are done by the parser.
         WarpArgument.Result wd = args.<WarpArgument.Result>getOne(warpNameArg).get();
+        WarpConfig wc = adapter.getNodeOrDefault();
 
         Optional<Integer> i = wd.loc.getCost();
         double cost;
         if (i.isPresent()) {
             cost = i.get();
         } else {
-            cost = adapter.getNodeOrDefault().getDefaultWarpCost();
+            cost = wc.getDefaultWarpCost();
         }
 
         boolean chg = false;
@@ -130,7 +132,7 @@ public class WarpCommand extends CommandBase<Player> {
         pl.sendMessage(Util.getTextMessageWithFormat("command.warps.start", wd.warp));
 
         // Warp them.
-        if (args.getOne("f").isPresent()) { // Force the position.
+        if (!wc.isEnableSafeWarp() || args.getOne("f").isPresent()) { // Force the position.
             pl.setLocationAndRotation(wd.loc.getLocation(), wd.loc.getRotation());
         } else if (!pl.setLocationAndRotationSafely(wd.loc.getLocation(), wd.loc.getRotation())) {
             pl.sendMessage(Util.getTextMessageWithFormat("command.warps.nosafe"));

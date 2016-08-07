@@ -13,7 +13,14 @@ public class TeleportConfig {
     @Setting(value = "default-quiet", comment = "loc:config.teleport.quiet")
     private boolean defaultQuiet = true;
 
+    @Setting(value = "safe-tp-default", comment = "loc:config.teleport.safe")
+    private boolean defaultSafeTeleport = true;
+
     public boolean isDefaultQuiet() {
         return defaultQuiet;
+    }
+
+    public boolean isDefaultSafeTeleport() {
+        return defaultSafeTeleport;
     }
 }

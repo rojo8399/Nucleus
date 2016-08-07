@@ -5,13 +5,10 @@
 package io.github.nucleuspowered.nucleus.modules.teleport.commands;
 
 import io.github.nucleuspowered.nucleus.Util;
-import io.github.nucleuspowered.nucleus.internal.annotations.NoCooldown;
-import io.github.nucleuspowered.nucleus.internal.annotations.NoCost;
-import io.github.nucleuspowered.nucleus.internal.annotations.NoWarmup;
-import io.github.nucleuspowered.nucleus.internal.annotations.Permissions;
-import io.github.nucleuspowered.nucleus.internal.annotations.RegisterCommand;
-import io.github.nucleuspowered.nucleus.internal.annotations.RunAsync;
+import io.github.nucleuspowered.nucleus.argumentparsers.NucleusGenericArgument;
+import io.github.nucleuspowered.nucleus.internal.annotations.*;
 import io.github.nucleuspowered.nucleus.internal.command.CommandBase;
+import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.teleport.handlers.TeleportHandler;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandResult;
@@ -19,11 +16,12 @@ import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
-
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import org.spongepowered.api.text.Text;
+import org.spongepowered.api.util.Tristate;
 
 import javax.inject.Inject;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Permissions(root = "teleport")
 @NoWarmup
@@ -34,20 +32,35 @@ import javax.inject.Inject;
 public class TeleportAskAllHereCommand extends CommandBase<Player> {
 
     @Inject private TeleportHandler tpHandler;
+    @Inject private TeleportConfigAdapter tca;
+
+    private final String tristateResult = "tristate";
 
     @Override
     public CommandElement[] getArguments() {
-        return new CommandElement[] {GenericArguments.flags().flag("f").buildWith(GenericArguments.none())};
+        return new CommandElement[] {
+                GenericArguments.flags()
+                        .valueFlag(GenericArguments.optionalWeak(NucleusGenericArgument.tristateChoice(Text.of(tristateResult))), "s", "-safe")
+                        .buildWith(GenericArguments.none())
+        };
     }
 
     @Override
     public CommandResult executeCommand(Player src, CommandContext args) throws Exception {
+        boolean isSafe;
+        Tristate t = args.<Tristate>getOne(tristateResult).orElse(Tristate.UNDEFINED);
+        if (t == Tristate.UNDEFINED) {
+            isSafe = args.hasAny("s") || tca.getNodeOrDefault().isDefaultSafeTeleport();
+        } else {
+            isSafe = t.asBoolean();
+        }
+
         Sponge.getServer().getOnlinePlayers().forEach(x -> {
             if (x.equals(src)) {
                 return;
             }
 
-            TeleportHandler.TeleportBuilder tb = tpHandler.getBuilder().setFrom(x).setTo(src).setSafe(!args.<Boolean>getOne("f").orElse(false))
+            TeleportHandler.TeleportBuilder tb = tpHandler.getBuilder().setFrom(x).setTo(src).setSafe(isSafe)
                     .setBypassToggle(true).setSilentSource(true);
             tpHandler.addAskQuestion(x.getUniqueId(), new TeleportHandler.TeleportPrep(Instant.now().plus(30, ChronoUnit.SECONDS), null, 0, tb));
 

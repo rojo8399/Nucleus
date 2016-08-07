@@ -10,6 +10,7 @@ import io.github.nucleuspowered.nucleus.internal.annotations.*;
 import io.github.nucleuspowered.nucleus.internal.command.CommandBase;
 import io.github.nucleuspowered.nucleus.internal.permissions.PermissionInformation;
 import io.github.nucleuspowered.nucleus.internal.permissions.SuggestedLevel;
+import io.github.nucleuspowered.nucleus.modules.teleport.config.TeleportConfigAdapter;
 import io.github.nucleuspowered.nucleus.modules.teleport.handlers.TeleportHandler;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.args.CommandContext;
@@ -17,6 +18,7 @@ import org.spongepowered.api.command.args.CommandElement;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.util.Tristate;
 
 import javax.inject.Inject;
 import java.time.Instant;
@@ -34,7 +36,9 @@ import static io.github.nucleuspowered.nucleus.modules.teleport.commands.Telepor
 public class TeleportAskHereCommand extends CommandBase<Player> {
 
     @Inject private TeleportHandler tpHandler;
+    @Inject private TeleportConfigAdapter tca;
 
+    private static final String tristateResult = "tristate";
     static final String playerKey = "player";
 
     @Override
@@ -60,7 +64,15 @@ public class TeleportAskHereCommand extends CommandBase<Player> {
             return CommandResult.empty();
         }
 
-        TeleportHandler.TeleportBuilder tb = tpHandler.getBuilder().setFrom(target).setTo(src).setSafe(!args.<Boolean>getOne("f").orElse(false));
+        boolean isSafe;
+        Tristate t = args.<Tristate>getOne(tristateResult).orElse(Tristate.UNDEFINED);
+        if (t == Tristate.UNDEFINED) {
+            isSafe = args.hasAny("s") || tca.getNodeOrDefault().isDefaultSafeTeleport();
+        } else {
+            isSafe = t.asBoolean();
+        }
+
+        TeleportHandler.TeleportBuilder tb = tpHandler.getBuilder().setFrom(target).setTo(src).setSafe(isSafe);
         int warmup = getWarmup(target);
         if (warmup > 0) {
             tb.setWarmupTime(warmup);
